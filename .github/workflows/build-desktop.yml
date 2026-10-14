@@ -1,4 +1,4 @@
-name: Build desktop test releases
+name: Build desktop packages
 on:
   workflow_dispatch:
   push:
@@ -12,10 +12,14 @@ jobs:
         include:
           - os: macos-latest
             command: npm run build:mac
-            artifact: AdminisStraight-mac-unsigned
+            artifact: AdminisStraight-mac
+            certificate_secret: MAC_CSC_LINK
+            password_secret: MAC_CSC_KEY_PASSWORD
           - os: windows-latest
             command: npm run build:windows
-            artifact: AdminisStraight-windows-unsigned
+            artifact: AdminisStraight-windows
+            certificate_secret: WIN_CSC_LINK
+            password_secret: WIN_CSC_KEY_PASSWORD
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -24,14 +28,58 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Verify release tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: node -e 'if (process.env.RELEASE_TAG !== "v" + require("./package.json").version) throw new Error("Release tag must match package.json version")'
       - run: npm test
       - run: ${{ matrix.command }}
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK != '' && 'true' || 'false' }}
+          CSC_LINK: ${{ secrets[matrix.certificate_secret] }}
+          CSC_KEY_PASSWORD: ${{ secrets[matrix.password_secret] }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             release/*.zip
+            release/*.dmg
             release/*.exe
+            release/*.yml
+            !release/builder-*.yml
+            release/*.blockmap
           if-no-files-found: error
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Prepare release for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          Desktop update with planner data preserved.
+
+          Download the package for your operating system and architecture. Mac builds require manual replacement unless signed. Before publishing for users, validate native startup, install/update behavior, Mac signing and notarization, and Windows signing.
+
+          Publishing this draft makes its packages and update metadata available to installed apps. Older builds without Update app need one manual installation first. Planner data and preferences remain in the existing user-data folder.
+          NOTES
+          options=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then options+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" release/* --verify-tag --draft "${options[@]}" --title "AdminisStraight $RELEASE_TAG" --notes-file release-notes.md
