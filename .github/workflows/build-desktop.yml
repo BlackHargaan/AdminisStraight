@@ -116,7 +116,7 @@ jobs:
             RELEASE_ID="$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == env.TAG) | .id')"
           fi
           cat > release-notes.md <<'NOTES'
-          Desktop test builds for macOS, Windows, and Linux. Version 0.1.2 adds a slim theme-matched draggable title bar, native window controls, an application-menu button, and narrow rounded scrollbars that follow the selected palette. Includes the persistent AM/PM preference and Update app controls.
+          Desktop test builds for macOS, Windows, and Linux. Version 0.1.3 fixes Windows update downloads by using installer filenames that exactly match update metadata. Version 0.1.2 adds a slim theme-matched draggable title bar, native window controls, an application-menu button, and narrow rounded scrollbars that follow the selected palette. Includes the persistent AM/PM preference and Update app controls.
 
           Downloads:
           - macOS: Apple silicon (arm64) or Intel (x64) ZIP / DMG. Requires macOS 13 or later.
@@ -130,6 +130,4 @@ jobs:
           SHA256SUMS.txt contains installer checksums. Update metadata and blockmaps are attached alongside the packages.
           NOTES
           gh release upload "$TAG" release/* --clobber
-          STALE_ID="$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets" --jq '.[] | select(.name == "release-upload-check.txt") | .id')"
-          if [[ -n "$STALE_ID" ]]; then gh api --method DELETE "repos/$GH_REPO/releases/assets/$STALE_ID"; fi
           gh release edit "$TAG" --title "AdminisStraight $VERSION — desktop test builds" --notes-file release-notes.md --draft=false --prerelease --latest=false
