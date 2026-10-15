@@ -1,13 +1,16 @@
-name: Build desktop packages
+name: Build and release desktop packages
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['v*']
+    paths: ['.github/workflows/build-desktop.yml', 'package*.json', 'desktop/**', 'ui/**', 'assets/**', 'tests/**']
 permissions:
   contents: read
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -20,6 +23,11 @@ jobs:
             artifact: AdminisStraight-windows
             certificate_secret: WIN_CSC_LINK
             password_secret: WIN_CSC_KEY_PASSWORD
+          - os: ubuntu-22.04
+            command: npm run build:linux
+            artifact: AdminisStraight-linux
+            certificate_secret: LINUX_UNUSED_CERTIFICATE
+            password_secret: LINUX_UNUSED_PASSWORD
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -50,36 +58,71 @@ jobs:
             release/*.zip
             release/*.dmg
             release/*.exe
+            release/*.AppImage
             release/*.yml
             !release/builder-*.yml
             release/*.blockmap
           if-no-files-found: error
-  draft-release:
-    if: startsWith(github.ref, 'refs/tags/v')
+  release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: release
           merge-multiple: true
-      - name: Prepare release for review
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Validate packages and generate checksums
         shell: bash
         run: |
           set -euo pipefail
+          compgen -G 'release/*arm64*.zip' >/dev/null
+          compgen -G 'release/*mac.zip' >/dev/null
+          compgen -G 'release/*.dmg' >/dev/null
+          compgen -G 'release/*.exe' >/dev/null
+          compgen -G 'release/*.AppImage' >/dev/null
+          test -f release/latest-mac.yml
+          test -f release/latest.yml
+          test -f release/latest-linux.yml
+          cd release
+          sha256sum *.zip *.dmg *.exe *.AppImage > SHA256SUMS.txt
+      - name: Publish cross-platform test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          export TAG="v$VERSION"
+          RELEASE_ID="$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == env.TAG) | .id')"
+          if [[ -n "$RELEASE_ID" ]]; then
+            DRAFT="$(gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq '.draft')"
+            if [[ "$DRAFT" != "true" ]]; then
+              echo "Version already published; leaving its assets unchanged. Bump the version for a new release."
+              exit 0
+            fi
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "AdminisStraight $VERSION — desktop test builds"
+            RELEASE_ID="$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == env.TAG) | .id')"
+          fi
           cat > release-notes.md <<'NOTES'
-          Desktop update with planner data preserved.
+          Desktop test builds for macOS, Windows, and Linux, including the persistent AM/PM display preference and Update app controls.
 
-          Download the package for your operating system and architecture. Mac builds require manual replacement unless signed. Before publishing for users, validate native startup, install/update behavior, Mac signing and notarization, and Windows signing.
+          Downloads:
+          - macOS: Apple silicon (arm64) or Intel (x64) ZIP / DMG. Requires macOS 13 or later.
+          - Windows: x64 NSIS setup executable.
+          - Linux: x64 AppImage.
 
-          Publishing this draft makes its packages and update metadata available to installed apps. Older builds without Update app need one manual installation first. Planner data and preferences remain in the existing user-data folder.
+          Packaging and Node tests run on native GitHub-hosted runners for all three operating systems. Native interactive startup, installer and end-to-end update testing remain outstanding. Packages without signing credentials are unsigned and may be blocked by the operating system. Unsigned Mac apps require manual replacement.
+
+          Export a planner backup before upgrading. Keep the existing user-data folder. Version 0.1.0 needs one manual upgrade before Update app becomes available. This test release is a prerelease: enable preview releases in Update app to check for it. The repository remains private; update checks require access to published assets.
+
+          SHA256SUMS.txt contains installer checksums. Update metadata and blockmaps are attached alongside the packages.
           NOTES
-          options=()
-          if [[ "$RELEASE_TAG" == *-* ]]; then options+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" release/* --verify-tag --draft "${options[@]}" --title "AdminisStraight $RELEASE_TAG" --notes-file release-notes.md
+          gh release upload "$TAG" release/* --clobber
+          STALE_ID="$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets" --jq '.[] | select(.name == "release-upload-check.txt") | .id')"
+          if [[ -n "$STALE_ID" ]]; then gh api --method DELETE "repos/$GH_REPO/releases/assets/$STALE_ID"; fi
+          gh release edit "$TAG" --title "AdminisStraight $VERSION — desktop test builds" --notes-file release-notes.md --draft=false --prerelease --latest=false
