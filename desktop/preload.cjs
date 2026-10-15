@@ -1,5 +1,8 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('adminisDesktop',Object.freeze({
+ platform:process.platform,
+ setWindowTheme:theme=>ipcRenderer.invoke('chrome:theme',theme),
+ openAppMenu:()=>ipcRenderer.invoke('chrome:menu'),
  readData:()=>ipcRenderer.sendSync('planner:read'),
  writeData:data=>ipcRenderer.sendSync('planner:write',data),
  exportBackup:()=>ipcRenderer.invoke('planner:export'),
@@ -13,3 +16,4 @@ contextBridge.exposeInMainWorld('adminisDesktop',Object.freeze({
  onUpdateStatus:callback=>{const listener=(_event,state)=>callback(state);ipcRenderer.on('updates:status',listener);return ()=>ipcRenderer.removeListener('updates:status',listener)},
  onShowUpdates:callback=>{const listener=()=>callback();ipcRenderer.on('updates:show',listener);return ()=>ipcRenderer.removeListener('updates:show',listener)}
 }));
+

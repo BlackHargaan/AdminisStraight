@@ -116,7 +116,7 @@ jobs:
             RELEASE_ID="$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == env.TAG) | .id')"
           fi
           cat > release-notes.md <<'NOTES'
-          Desktop test builds for macOS, Windows, and Linux, including the persistent AM/PM display preference and Update app controls.
+          Desktop test builds for macOS, Windows, and Linux. Version 0.1.2 adds a slim theme-matched draggable title bar, native window controls, an application-menu button, and narrow rounded scrollbars that follow the selected palette. Includes the persistent AM/PM preference and Update app controls.
 
           Downloads:
           - macOS: Apple silicon (arm64) or Intel (x64) ZIP / DMG. Requires macOS 13 or later.
