@@ -3,6 +3,7 @@ contextBridge.exposeInMainWorld('adminisDesktop',Object.freeze({
  platform:process.platform,
  setWindowTheme:theme=>ipcRenderer.invoke('chrome:theme',theme),
  openAppMenu:()=>ipcRenderer.invoke('chrome:menu'),
+ readCalendarFeed:url=>ipcRenderer.invoke('calendar:feed',url),
  readData:()=>ipcRenderer.sendSync('planner:read'),
  writeData:data=>ipcRenderer.sendSync('planner:write',data),
  exportBackup:()=>ipcRenderer.invoke('planner:export'),

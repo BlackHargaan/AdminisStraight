@@ -116,7 +116,7 @@ jobs:
             RELEASE_ID="$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == env.TAG) | .id')"
           fi
           cat > release-notes.md <<'NOTES'
-          Desktop test builds for macOS, Windows, and Linux. Version 0.1.3 fixes Windows update downloads by using installer filenames that exactly match update metadata. Version 0.1.2 adds a slim theme-matched draggable title bar, native window controls, an application-menu button, and narrow rounded scrollbars that follow the selected palette. Includes the persistent AM/PM preference and Update app controls.
+          School-year calendar release: year-at-a-glance editing, weekly / A-B / rotating day rules, drag and keyboard painting, alternate bell schedules, grading periods, reviewed ICS/feed imports, calendar rule exchange, and date-aware classroom schedules. Shared staff publishing and notifications are not connected.
 
           Downloads:
           - macOS: Apple silicon (arm64) or Intel (x64) ZIP / DMG. Requires macOS 13 or later.

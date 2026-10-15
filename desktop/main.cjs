@@ -1,6 +1,7 @@
 const {app,BrowserWindow,Menu,dialog,ipcMain,shell,session}=require('electron');
 const fs=require('node:fs');const path=require('node:path');const {pathToFileURL}=require('node:url');
 const {chromeOptions,validateChromeTheme}=require('./chrome.cjs');
+const {readCalendarFeed}=require('./calendar-feed.cjs');
 const {PlannerStore}=require('./storage.cjs');
 const {autoUpdater}=require('electron-updater');
 const {createUpdateManager,installationMethod}=require('./updates.cjs');
@@ -17,6 +18,7 @@ if(!app.requestSingleInstanceLock()){app.quit()}else{
  app.whenReady().then(async()=>{({validateBackup:validate}=await import(pathToFileURL(path.join(__dirname,'../ui/model.js')).href));store=new PlannerStore(app.getPath('userData'),validate);session.defaultSession.setPermissionRequestHandler((_web,_permission,callback)=>callback(false));session.defaultSession.setPermissionCheckHandler(()=>false);
  ipcMain.handle('chrome:theme',(e,value)=>{if(!trusted(e))throw Error('Not authorized');const colors=validateChromeTheme(value);if(process.platform!=='darwin')window.setTitleBarOverlay(colors);window.setBackgroundColor(colors.color);return true});
  ipcMain.handle('chrome:menu',e=>{if(!trusted(e))throw Error('Not authorized');Menu.getApplicationMenu()?.popup({window,x:8,y:38});return true});
+ ipcMain.handle('calendar:feed',async(e,url)=>{if(!trusted(e))throw Error('Not authorized');try{return {ok:true,text:await readCalendarFeed(url)}}catch(error){return {ok:false,error:error.message}}});
  ipcMain.on('planner:read',e=>{e.returnValue=trusted(e)?reply(()=>store.read()):{ok:false,error:'Not authorized'}});
  ipcMain.on('planner:write',(e,data)=>{e.returnValue=trusted(e)?reply(()=>store.write(data)):{ok:false,error:'Not authorized'}});
  updates=createUpdateManager({updater:autoUpdater,version:app.getVersion(),method:installationMethod({packaged:app.isPackaged,platform:process.platform,appPath:path.resolve(process.execPath,'../../..'),appImage:process.env.APPIMAGE}),notify:state=>{if(window&&!window.isDestroyed())window.webContents.send('updates:status',state)},openExternal:url=>shell.openExternal(url),confirmInstall:async()=>{const result=await dialog.showMessageBox(window,{type:'question',buttons:['Keep working','Restart to update'],defaultId:0,cancelId:0,message:'Restart AdminisStraight to install the update?',detail:'Your saved planner and local preferences will stay on this computer. Finish any open edits before restarting.'});return result.response===1}});

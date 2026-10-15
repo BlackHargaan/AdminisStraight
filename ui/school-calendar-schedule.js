@@ -1,0 +1,3 @@
+import {calendarDay} from './school-year-model.js';
+import {matchTimeBlock} from './schedule-model.js';
+export function periodsForDate(state,date){const y=state.schoolYear,day=y?calendarDay(y,date):null;if(day&&!day.isSchoolDay)return [];const weekday=new Date(date+'T12:00:00').getDay();return (state.periods||[]).filter(p=>{if(p.unassigned)return false;return p.dayKeys&&day?p.dayKeys.split(',').map(k=>k.trim()).includes(day.dayKey):p.days.split(',').includes(String(weekday))}).flatMap(p=>{const block=matchTimeBlock(p,state.timeBlocks||[]),times=block&&day?.dayType?.periodTimes?.[block.id];if(times===null)return [];return [{...p,...(times||{}),days:String(weekday)}]})}
