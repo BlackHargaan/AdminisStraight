@@ -43,7 +43,14 @@ jobs:
         shell: bash
         run: node -e 'if (process.env.RELEASE_TAG !== "v" + require("./package.json").version) throw new Error("Release tag must match package.json version")'
       - run: npm test
-      - run: ${{ matrix.command }}
+      - name: Build platform package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variable in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!variable:-}" ]]; then unset "$variable"; fi
+          done
+          ${{ matrix.command }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK != '' && 'true' || 'false' }}
           CSC_LINK: ${{ secrets[matrix.certificate_secret] }}
